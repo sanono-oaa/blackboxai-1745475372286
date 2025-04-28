@@ -1,0 +1,33 @@
+{
+  "__bytecode.const": {
+    "blob_name": ".bytecode",
+    "blob_size": 4235048,
+    "input_size": 4258661
+  },
+  "__constants.const": {
+    "blob_name": "",
+    "blob_size": 823,
+    "input_size": 2112
+  },
+  "module.__main__.const": {
+    "blob_name": "__main__",
+    "blob_size": 5776,
+    "input_size": 9143
+  },
+  "module.__parents_main__.const": {
+    "blob_name": "__parents_main__",
+    "blob_size": 5881,
+    "input_size": 9408
+  },
+  "module.multiprocessing-postLoad.const": {
+    "blob_name": "multiprocessing-postLoad",
+    "blob_size": 364,
+    "input_size": 692
+  },
+  "module.multiprocessing-preLoad.const": {
+    "blob_name": "multiprocessing-preLoad",
+    "blob_size": 202,
+    "input_size": 408
+  },
+  "total": 1148
+}
