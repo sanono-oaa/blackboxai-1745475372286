@@ -7,14 +7,59 @@ let intervalIds = [];
 const CONFIG = {
     checkInterval: 1000, // Time between checks in milliseconds
     maxRetries: 3,      // Maximum number of retries for actions
+    resourceTypes: ['wood', 'wine', 'marble', 'crystal', 'sulfur'],
+    buildingTypes: ['townHall', 'academy', 'warehouse', 'tavern', 'palace', 'tradingPort', 'barracks', 'shipyard'],
+    unitTypes: ['hoplite', 'steamGiant', 'spearman', 'swordsman', 'slinger', 'archer', 'ram', 'catapult', 'mortar', 'gyrocopter', 'balloonBombardier', 'cook', 'doctor'],
+    shipTypes: ['ramship', 'flamethrower', 'steamram', 'rocketship', 'ballista', 'catapult', 'mortar', 'submarine'],
+    // Resource management
+    minResourceLevel: 1000,  // Minimum resource amount before warning
+    maxResourceLevel: 25000, // Maximum resource amount before selling
+    targetResourceLevel: 15000, // Target resource amount after buying/selling
+    // Military management
+    minUnitCount: 100,      // Minimum number of each unit type
+    // Wine management
+    minWineTime: 2,         // Minimum hours of wine supply before warning
+    // Construction
+    maxConstructionQueue: 2  // Maximum number of buildings in construction queue
+};
+
+// Selectors for game elements
+const SELECTORS = {
+    resources: {
+        wood: '#js_GlobalMenu_wood',
+        wine: '#js_GlobalMenu_wine',
+        marble: '#js_GlobalMenu_marble',
+        crystal: '#js_GlobalMenu_crystal',
+        sulfur: '#js_GlobalMenu_sulfur'
+    },
+    buildings: {
+        constructionList: '.constructionList',
+        buildingSpots: '.buildingSpot',
+        upgradeButton: '.upgradeButton'
+    },
+    military: {
+        unitTraining: '.unitTraining',
+        barracks: '#barracks',
+        shipyard: '#shipyard'
+    },
+    marketplace: {
+        buyTab: '#buyTab',
+        sellTab: '#sellTab',
+        offerList: '.offerList'
+    }
 };
 
 // Main bot controller
 class BotController {
     constructor() {
         this.setupMessageListeners();
+        this.resources = {};
+        this.buildings = {};
+        this.military = {};
+        this.tasks = [];
     }
 
+    // Message handling
     setupMessageListeners() {
         chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             switch (message.action) {
@@ -22,12 +67,63 @@ class BotController {
                     this.stop();
                     sendResponse({ success: true });
                     break;
-                // Add more message handlers as needed
+                case 'constructionList':
+                    this.getConstructionList().then(list => sendResponse({ success: true, data: list }));
+                    break;
+                case 'sendResources':
+                    this.sendResources(message.data).then(result => sendResponse({ success: true, data: result }));
+                    break;
+                case 'distributeResources':
+                    this.distributeResources(message.data).then(result => sendResponse({ success: true, data: result }));
+                    break;
+                case 'getStatus':
+                    this.getStatus().then(status => sendResponse({ success: true, data: status }));
+                    break;
+                case 'activateShrine':
+                    this.activateShrine().then(result => sendResponse({ success: true, data: result }));
+                    break;
+                case 'loginDaily':
+                    this.loginDaily().then(result => sendResponse({ success: true, data: result }));
+                    break;
+                case 'checkAttacks':
+                    this.checkAttacks().then(attacks => sendResponse({ success: true, data: attacks }));
+                    break;
+                case 'checkWine':
+                    this.checkWineStatus().then(status => sendResponse({ success: true, data: status }));
+                    break;
+                case 'marketplaceBuy':
+                    this.buyResources(message.data).then(result => sendResponse({ success: true, data: result }));
+                    break;
+                case 'marketplaceSell':
+                    this.sellResources(message.data).then(result => sendResponse({ success: true, data: result }));
+                    break;
+                case 'donate':
+                    this.donate(message.data).then(result => sendResponse({ success: true, data: result }));
+                    break;
+                case 'trainArmy':
+                    this.trainArmy(message.data).then(result => sendResponse({ success: true, data: result }));
+                    break;
+                case 'stationArmy':
+                    this.stationArmy(message.data).then(result => sendResponse({ success: true, data: result }));
+                    break;
+                case 'shipMovements':
+                    this.getShipMovements().then(movements => sendResponse({ success: true, data: movements }));
+                    break;
+                case 'constructBuilding':
+                    this.constructBuilding(message.data).then(result => sendResponse({ success: true, data: result }));
+                    break;
+                case 'autoPirate':
+                    this.autoPirate(message.data).then(result => sendResponse({ success: true, data: result }));
+                    break;
+                case 'attackBarbarians':
+                    this.attackBarbarians(message.data).then(result => sendResponse({ success: true, data: result }));
+                    break;
             }
             return true;
         });
     }
 
+    // Bot control methods
     async start() {
         if (isActive) return;
         isActive = true;
@@ -35,143 +131,81 @@ class BotController {
         try {
             await this.initializeBot();
             this.startMainLoop();
+            
+            // Start monitoring systems
+            this.startResourceMonitoring();
+            this.startAttackMonitoring();
+            this.startWineMonitoring();
+            
+            chrome.runtime.sendMessage({
+                type: 'statusUpdate',
+                message: 'Bot started successfully',
+                status: 'success'
+            });
         } catch (error) {
             console.error('Bot initialization failed:', error);
             this.stop();
+            chrome.runtime.sendMessage({
+                type: 'statusUpdate',
+                message: 'Bot initialization failed: ' + error.message,
+                status: 'error'
+            });
         }
     }
 
     stop() {
         isActive = false;
-        // Clear all intervals
         intervalIds.forEach(id => clearInterval(id));
         intervalIds = [];
         currentTask = null;
     }
 
-    async initializeBot() {
-        // Initialize bot state and verify page
-        if (!this.isValidPage()) {
-            throw new Error('Invalid page for bot operation');
-        }
-    }
-
-    isValidPage() {
-        // Add logic to verify if current page is valid for bot operations
-        return true; // Placeholder
-    }
-
+    // Core functionality methods
     startMainLoop() {
-        const mainLoopId = setInterval(() => {
+        const mainLoopId = setInterval(async () => {
             if (!isActive) {
                 clearInterval(mainLoopId);
                 return;
             }
-
-            this.performTasks();
+            await this.performTasks();
         }, CONFIG.checkInterval);
-
         intervalIds.push(mainLoopId);
     }
 
     async performTasks() {
-        if (currentTask) return; // Task in progress
+        if (currentTask) return;
 
         try {
-            // Check resources
-            await this.checkResources();
-            
-            // Check buildings
-            await this.checkBuildings();
-            
-            // Check research
-            await this.checkResearch();
-            
-            // Check military
-            await this.checkMilitary();
-            
-            // Check diplomacy
-            await this.checkDiplomacy();
+            const constructionList = await this.getConstructionList();
+            if (constructionList.length < CONFIG.maxConstructionQueue) {
+                await this.findAndStartConstruction();
+            }
+
+            const military = await this.getMilitaryStatus();
+            if (this.shouldTrainUnits(military)) {
+                await this.trainArmy({ units: this.calculateNeededUnits(military) });
+            }
+
+            if (this.shouldTradeResources()) {
+                await this.handleMarketplace();
+            }
         } catch (error) {
             console.error('Task error:', error);
             this.reportError(error);
         }
     }
 
-    // Resource management
-    async checkResources() {
-        const resources = await this.getResources();
-        // Implement resource management logic
+    // Helper methods
+    async sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    async getResources() {
-        // Implement resource gathering logic
-        return {
-            wood: 0,
-            wine: 0,
-            marble: 0,
-            crystal: 0,
-            sulfur: 0
-        };
-    }
-
-    // Building management
-    async checkBuildings() {
-        const buildings = await this.getBuildings();
-        // Implement building management logic
-    }
-
-    async getBuildings() {
-        // Implement building status gathering logic
-        return [];
-    }
-
-    // Research management
-    async checkResearch() {
-        const research = await this.getResearch();
-        // Implement research management logic
-    }
-
-    async getResearch() {
-        // Implement research status gathering logic
-        return [];
-    }
-
-    // Military management
-    async checkMilitary() {
-        const military = await this.getMilitary();
-        // Implement military management logic
-    }
-
-    async getMilitary() {
-        // Implement military status gathering logic
-        return [];
-    }
-
-    // Diplomacy management
-    async checkDiplomacy() {
-        const diplomacy = await this.getDiplomacy();
-        // Implement diplomacy management logic
-    }
-
-    async getDiplomacy() {
-        // Implement diplomacy status gathering logic
-        return [];
-    }
-
-    // Helper functions
-    async clickElement(selector, retries = CONFIG.maxRetries) {
-        for (let i = 0; i < retries; i++) {
-            try {
-                const element = await this.waitForElement(selector);
-                element.click();
-                return true;
-            } catch (error) {
-                if (i === retries - 1) throw error;
-                await this.sleep(1000);
-            }
-        }
-        return false;
+    reportError(error) {
+        chrome.runtime.sendMessage({
+            type: 'statusUpdate',
+            message: `Error: ${error.message}`,
+            status: 'error'
+        });
     }
 
     async waitForElement(selector, timeout = 5000) {
@@ -199,16 +233,20 @@ class BotController {
         });
     }
 
-    sleep(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
+    async clickElement(selector) {
+        const element = await this.waitForElement(selector);
+        element.click();
+        return true;
     }
 
-    reportError(error) {
-        chrome.runtime.sendMessage({
-            type: 'statusUpdate',
-            message: `Error: ${error.message}`,
-            status: 'error'
-        });
+    async initializeBot() {
+        if (!this.isValidPage()) {
+            throw new Error('Invalid page for bot operation');
+        }
+    }
+
+    isValidPage() {
+        return true; // Implementation needed
     }
 }
 
