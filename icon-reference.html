@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>IkaBot Extension Icon Reference</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-8">
+    <div class="max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-sm">
+        <h1 class="text-2xl font-bold text-gray-800 mb-6">Icon Requirements</h1>
+        
+        <div class="space-y-6">
+            <div class="border-b pb-4">
+                <h2 class="text-lg font-semibold text-gray-700 mb-2">Required Icon Sizes</h2>
+                <ul class="list-disc pl-5 space-y-2 text-gray-600">
+                    <li>icon16.png (16x16 pixels)</li>
+                    <li>icon48.png (48x48 pixels)</li>
+                    <li>icon128.png (128x128 pixels)</li>
+                </ul>
+            </div>
+
+            <div class="border-b pb-4">
+                <h2 class="text-lg font-semibold text-gray-700 mb-2">Icon Guidelines</h2>
+                <ul class="list-disc pl-5 space-y-2 text-gray-600">
+                    <li>Use PNG format for transparency support</li>
+                    <li>Keep file sizes small (preferably under 10KB each)</li>
+                    <li>Use simple, recognizable designs that work at small sizes</li>
+                    <li>Ensure good contrast for visibility in Chrome's toolbar</li>
+                </ul>
+            </div>
+
+            <div>
+                <h2 class="text-lg font-semibold text-gray-700 mb-2">Installation</h2>
+                <ol class="list-decimal pl-5 space-y-2 text-gray-600">
+                    <li>Create an 'icons' directory in the extension root</li>
+                    <li>Add your icon files with the exact names: icon16.png, icon48.png, and icon128.png</li>
+                    <li>The manifest.json is already configured to use these icons</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
