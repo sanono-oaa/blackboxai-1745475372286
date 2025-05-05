@@ -44,45 +44,25 @@ from ikabot.function.webServer import webServer
 from ikabot.function.loadCustomModule import loadCustomModule
 from ikabot.function.activateShrine import activateShrine
 from ikabot.helpers.botComm import telegramDataIsValid, updateTelegramData
-from ikabot.helpers.gui import clear, enter
+from ikabot.helpers.gui import *
 from ikabot.helpers.pedirInfo import read
 from ikabot.helpers.process import updateProcessList
-from ikabot.helpers.banner import banner
 from ikabot.web.session import *
-from ikabot.account_manager import AccountManager
 
-def menu(account_manager, checkUpdate=True, refresh_interval=300):  # 5 minutes refresh interval
+
+def menu(session, checkUpdate=True):
     """
     Parameters
     ----------
-    account_manager : ikabot.account_manager.AccountManager
-        The account manager instance handling multiple sessions
+    session : ikabot.web.session.Session
     checkUpdate : bool
-        Whether to check for updates
-    refresh_interval : int
-        Time in seconds between session refreshes
     """
-    session = account_manager.get_active_session()
-    if not session:
-        print("No active session. Please select an account first.")
-        account_manager.manage_accounts()
-        return menu(account_manager)
-
     if checkUpdate:
         checkForUpdate()
 
     show_proxy(session)
 
-    banner(account_manager)
-
-    # Refresh sessions periodically
-    current_time = time.time()
-    if hasattr(menu, 'last_refresh'):
-        if current_time - menu.last_refresh > refresh_interval:
-            account_manager.refresh_sessions()
-            menu.last_refresh = current_time
-    else:
-        menu.last_refresh = current_time
+    banner()
 
     process_list = updateProcessList(session)
     if len(process_list) > 0:
@@ -192,73 +172,72 @@ def menu(account_manager, checkUpdate=True, refresh_interval=300):  # 5 minutes 
     print("(20) Dump / Monitor world")
     print("(21) Options / Settings")
     print("(22) Consolidate resources")
-    print("(23) Account Management")
-    total_options = len(menu_actions) + 2  # Added one more option for account management
+    total_options = len(menu_actions) + 1
     selected = read(min=0, max=total_options, digit=True, empty=True)
     
     # refresh main menu on hitting enter
     if selected == '':
-        return menu(account_manager)
+        return menu(session)
 
     if selected == 7:
-        banner(account_manager)
+        banner()
         print("(0) Back")
         print("(1) Alert attacks")
         print("(2) Alert wine running out")
 
         selected = read(min=0, max=2, digit=True)
         if selected == 0:
-            menu(account_manager)
+            menu(session)
             return
         if selected > 0:
             selected += 700
 
     if selected == 8:
-        banner(account_manager)
+        banner()
         print("(0) Back")
         print("(1) Buy resources")
         print("(2) Sell resources")
 
         selected = read(min=0, max=2, digit=True)
         if selected == 0:
-            menu(account_manager)
+            menu(session)
             return
         if selected > 0:
             selected += 800
 
     if selected == 9:
-        banner(account_manager)
+        banner()
         print("(0) Back")
         print("(1) Donate once")
         print("(2) Donate automatically")
 
         selected = read(min=0, max=2, digit=True)
         if selected == 0:
-            menu(account_manager)
+            menu(session)
             return
         if selected > 0:
             selected += 900
 
     if selected == 19:
-        banner(account_manager)
+        banner()
         print("(0) Back")
         print("(1) Simple Attack")
         print("(2) Auto Grind")
         selected = read(min=0, max=2, digit=True)
         if selected == 0:
-            menu(account_manager)
+            menu(session)
             return
         if selected > 0:
             selected += 1900
 
     if selected == 12:
-        banner(account_manager)
+        banner()
         print("(0) Back")
         print("(1) Train Army")
         print("(2) Send Troops/Ships")
         selected = read(min=0, max=2, digit=True)
         if selected == 0:
-            menu(account_manager)
+            menu(session)
             return
         if selected > 0:
             selected += 1200
@@ -270,13 +249,13 @@ def menu(account_manager, checkUpdate=True, refresh_interval=300):  # 5 minutes 
         
         selected = read(min=0, max=2, digit=True)
         if selected == 0:
-            menu(account_manager)
+            menu(session)
             return
         if selected > 0:
             selected += 2000
 
     if selected == 21:
-        banner(account_manager)
+        banner()
         print("(0) Back")
         print("(1) Configure Proxy")
         if telegramDataIsValid(session):
@@ -292,22 +271,18 @@ def menu(account_manager, checkUpdate=True, refresh_interval=300):  # 5 minutes 
 
         selected = read(min=0, max=8, digit=True)
         if selected == 0:
-            menu(account_manager)
+            menu(session)
             return
         if selected > 0:
             selected += 2100
 
     if selected != 0:
-        if selected == 23:
-            account_manager.manage_accounts()
-            return menu(account_manager, checkUpdate=False)
-            
         try:
             event = multiprocessing.Event()  # creates a new event
             config.has_params = len(config.predetermined_input) > 0
             process = multiprocessing.Process(
                 target=menu_actions[selected],
-                args=(account_manager.get_active_session(), event, sys.stdin.fileno(), config.predetermined_input),
+                args=(session, event, sys.stdin.fileno(), config.predetermined_input),
                 name=menu_actions[selected].__name__,
             )
             process.start()
@@ -323,7 +298,7 @@ def menu(account_manager, checkUpdate=True, refresh_interval=300):  # 5 minutes 
             event.wait()  # waits for the process to fire the event that's been given to it. When it does  this process gets back control of the command line and asks user for more input
         except KeyboardInterrupt:
             pass
-        menu(account_manager, checkUpdate=False)
+        menu(session, checkUpdate=False)
     else:
         if isWindows:
             # in unix, you can exit ikabot and close the terminal and the processes will continue to execute
@@ -331,7 +306,10 @@ def menu(account_manager, checkUpdate=True, refresh_interval=300):  # 5 minutes 
             print("Closing this console will kill the processes.")
             enter()
         clear()
-        os._exit(0)
+        os._exit(
+            0
+        )  # kills the process which executes this statement, but it does not kill it's child processes
+
 
 def init():
     home = "USERPROFILE" if isWindows else "HOME"
@@ -339,6 +317,7 @@ def init():
     if not os.path.isfile(ikaFile):
         open(ikaFile, "w")
         os.chmod(ikaFile, 0o600)
+
 
 def start():
     init()
@@ -350,30 +329,13 @@ def start():
             config.predetermined_input.append(arg)
     config.predetermined_input.pop(0)
 
-    account_manager = AccountManager()
-    
-    # If no accounts exist, prompt to add one
-    if not account_manager.accounts:
-        print("No accounts configured. Please add an account.")
-        email = read(msg="Enter email: ")
-        password = read(msg="Enter password: ")
-        alias = read(msg="Enter alias (or press enter to use email): ")
-        if not alias:
-            alias = email
-        account_manager.add_account(email, password, alias)
-        account_manager.switch_account(alias)
-    else:
-        # If accounts exist, let user choose one
-        account_manager.list_accounts()
-        alias = read(msg="Enter alias to use: ")
-        account_manager.switch_account(alias)
-
+    session = Session()
     try:
-        menu(account_manager)
+        menu(session)
     finally:
         clear()
-        if account_manager.get_active_session():
-            account_manager.get_active_session().logout()
+        session.logout()
+
 
 def main():
     manager = multiprocessing.Manager()
@@ -384,8 +346,16 @@ def main():
     except KeyboardInterrupt:
         clear()
 
+
 if __name__ == "__main__":
     # On Windows calling this function is necessary.
     if sys.platform.startswith("win"):
         multiprocessing.freeze_support()
     main()
+
+#############################################################
+# This is necessary to ensure that flask is frozen together #
+# with other requirements when creating ikabot.exe          #
+try: import flask                                           #
+except: pass                                                #
+#############################################################
