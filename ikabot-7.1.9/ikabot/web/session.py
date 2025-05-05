@@ -1209,11 +1209,7 @@ class Session:
 
     def getSessionData(self):
         """Gets relevant session data from the .ikabot file"""
-        data = self.cipher.getSessionData(self)
-        # Add account identifier to ensure separate data storage
-        if 'account_id' not in data:
-            data['account_id'] = self.mail  # Use email as unique identifier
-        return data
+        return self.cipher.getSessionData(self)
 
 
 def normal_get(url, params={}):
