@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ikabot Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .feature-card {
+            transition: transform 0.2s;
+        }
+        .feature-card:hover {
+            transform: translateY(-2px);
+        }
+        #logsContainer::-webkit-scrollbar {
+            width: 8px;
+        }
+        #logsContainer::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+        #logsContainer::-webkit-scrollbar-thumb {
+            background: #4a4a4a;
+            border-radius: 4px;
+        }
+        #logsContainer::-webkit-scrollbar-thumb:hover {
+            background: #5a5a5a;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-bold text-gray-800">Ikabot Dashboard</h1>
+                </div>
+                <div class="flex items-center">
+                    <button id="logoutBtn" class="text-gray-600 hover:text-gray-800 flex items-center">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Features Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="featuresGrid">
+            <!-- Features will be dynamically added here -->
+        </div>
+
+        <!-- Logs Section -->
+        <div class="mt-8">
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800">
+                        <i class="fas fa-terminal mr-2"></i>Bot Logs
+                    </h2>
+                    <button id="clearLogs" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-trash-alt mr-1"></i>Clear
+                    </button>
+                </div>
+                <div id="logsContainer" class="bg-gray-900 text-gray-100 rounded-lg p-4 h-64 overflow-y-auto font-mono text-sm">
+                    <!-- Logs will be added here -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Connect to WebSocket
+        const socket = io(window.location.origin);
+        const logsContainer = document.getElementById('logsContainer');
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+
+        socket.on('connect', () => {
+            addLog('Connected to server');
+            reconnectAttempts = 0;
+        });
+
+        socket.on('connect_error', () => {
+            if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                addLog(`Connection failed. Retrying... (${reconnectAttempts}/${maxReconnectAttempts})`);
+            } else {
+                addLog('Failed to connect to server. Please refresh the page.');
+            }
+        });
+
+        socket.on('bot_log', (data) => {
+            addLog(data.message);
+        });
+
+        socket.on('disconnect', () => {
+            addLog('Disconnected from server');
+        });
+
+        function addLog(message) {
+            const logEntry = document.createElement('div');
+            logEntry.className = 'mb-1';
+            logEntry.innerHTML = `<span class="text-gray-500">[${new Date().toLocaleTimeString()}]</span> ${message}`;
+            logsContainer.appendChild(logEntry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        document.getElementById('clearLogs').addEventListener('click', () => {
+            logsContainer.innerHTML = '';
+            addLog('Logs cleared');
+        });
+
+        // Fetch and render features
+        async function loadFeatures() {
+            try {
+                const response = await fetch('/api/features', {
+                    credentials: 'include'
+                });
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = '/';
+                        return;
+                    }
+                    throw new Error('Failed to load features');
+                }
+                const features = await response.json();
+                renderFeatures(features);
+            } catch (error) {
+                addLog(`Error: ${error.message}`);
+            }
+        }
+
+        function renderFeatures(features) {
+            const grid = document.getElementById('featuresGrid');
+            grid.innerHTML = features.map(feature => `
+                <div class="feature-card bg-white rounded-lg shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">${feature.name}</h3>
+                        <div class="relative inline-block w-12 h-6">
+                            <input type="checkbox" id="${feature.id}" 
+                                class="peer hidden" ${feature.active ? 'checked' : ''}
+                                onchange="toggleFeature('${feature.id}', this.checked)">
+                            <label for="${feature.id}" 
+                                class="absolute cursor-pointer inset-0 bg-gray-300 peer-checked:bg-blue-600 rounded-full transition-colors duration-300">
+                                <span class="absolute inset-y-0 left-0 w-6 h-6 bg-white rounded-full shadow transform peer-checked:translate-x-6 transition-transform duration-300"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <p class="text-gray-600 text-sm">${feature.description}</p>
+                </div>
+            `).join('');
+        }
+
+        async function toggleFeature(featureId, enabled) {
+            try {
+                const response = await fetch(`/api/feature/${featureId}/toggle`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to toggle feature');
+                }
+                
+                const data = await response.json();
+                addLog(`${featureId} ${data.status}`);
+            } catch (error) {
+                addLog(`Error: ${error.message}`);
+                // Revert toggle if failed
+                document.getElementById(featureId).checked = !enabled;
+            }
+        }
+
+        // Handle logout
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Logout failed');
+                }
+                
+                window.location.href = '/';
+            } catch (error) {
+                addLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Check authentication on page load
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/features', {
+                    credentials: 'include'
+                });
+                if (!response.ok) {
+                    window.location.href = '/';
+                    return;
+                }
+            } catch (error) {
+                window.location.href = '/';
+            }
+        }
+
+        // Initial load
+        checkAuth();
+        loadFeatures();
+    </script>
+</body>
+</html>
